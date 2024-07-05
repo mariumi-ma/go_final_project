@@ -3,10 +3,10 @@ module go_final_project
 go 1.21.6
 
 require (
-	github.com/go-chi/chi/v5 v5.0.14
 	github.com/jmoiron/sqlx v1.4.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.22
+	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	modernc.org/sqlite v1.30.1
 )

@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+const DateFormat string = "20060102"
+
 // MonthsDays устанавливает количество дней в каждом месяце.
 var MonthsDays = map[int]int{
 	1:  31, // Jan
@@ -89,6 +91,16 @@ func ConvertInt(str []string, days bool) ([]int, error) {
 	return daysInt, nil
 }
 
+// IsDate возваращет true и отформатированную дату, если параметр является датой, если строка - "", false .
+func IsDate(str string) (string, bool) {
+
+	timeSearch, err := time.Parse("02.01.2006", str)
+	if err == nil {
+		return timeSearch.Format(DateFormat), true
+	}
+	return "", false
+}
+
 // NextDate высчитывает и возвращает следующую дату задачи. Возвращаемая дата должна быть
 // больше даты, указанной в переменной now.
 // now - время от которого ищется ближайшая дата;
@@ -107,7 +119,7 @@ func ConvertInt(str []string, days bool) ([]int, error) {
 // '-2' - предпоследний день месяца.
 func NextDate(now time.Time, date string, repeat string) (string, error) {
 
-	dateParse, err := time.Parse("20060102", date)
+	dateParse, err := time.Parse(DateFormat, date)
 	if err != nil {
 		return "", err
 	}
@@ -136,7 +148,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			next = next.AddDate(1, 0, 0)
 		}
 
-		return next.Format("20060102"), nil
+		return next.Format(DateFormat), nil
 
 	case "d":
 		if len(yearMonthDay) != 2 { // проверяем, чтобы были указаны дни повторений
@@ -161,7 +173,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			next = next.AddDate(0, 0, dayInt)
 		}
 
-		return next.Format("20060102"), nil
+		return next.Format(DateFormat), nil
 
 	case "w":
 		if len(yearMonthDay) != 2 { // проверяем, чтобы были указаны дни недели
@@ -200,7 +212,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 			next = next.AddDate(0, 0, 1)
 		}
 
-		return next.Format("20060102"), nil
+		return next.Format(DateFormat), nil
 
 	case "m":
 		if len(yearMonthDay) < 2 {
@@ -222,7 +234,8 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 		loop2:
 			for {
 				for _, dayNew := range daysInt {
-
+					// 40 - это '-1' (последний день месяца)
+					// 35 - это '-2' (предпоследний день месяца)
 					if dayNew == 35 || dayNew == 40 {
 						dayNew = DayLessZero(year, int(month), dayNew)
 					}
@@ -243,7 +256,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 						break loop2
 					}
 				}
-				// Если в декабре нет подходящей даты, то задача переносится на январь следующего года
+				// Если в декабре нет подходящей даты, то задача переносится на январь следующего года.
 				if month == 12 {
 					year += 1
 					month = 1
@@ -251,9 +264,9 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 					month++
 				}
 			}
-			return next.Format("20060102"), nil
+			return next.Format(DateFormat), nil
 		}
-		// Это услосвие определения, что указаны дни повторений и месяцев.
+		// Это условие определения, что указаны дни повторений и месяцев.
 		if len(yearMonthDay) == 3 {
 			daysRepeat := strings.Split(yearMonthDay[1], ",")
 			monthsRepeat := strings.Split(yearMonthDay[2], ",")
@@ -289,7 +302,7 @@ func NextDate(now time.Time, date string, repeat string) (string, error) {
 				}
 				year++ // Если за текущий год нет подходящей даты, цикл переходит на следующий год.
 			}
-			return next.Format("20060102"), nil
+			return next.Format(DateFormat), nil
 		}
 
 	}
