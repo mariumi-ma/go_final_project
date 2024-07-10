@@ -2,9 +2,8 @@
 package handler
 
 import (
-	"encoding/json"
 	"go_final_project/internal/date"
-	"go_final_project/internal/model"
+	"go_final_project/internal/helper"
 	"go_final_project/internal/storage"
 	"net/http"
 	"time"
@@ -22,7 +21,7 @@ func GetNextDate(w http.ResponseWriter, req *http.Request) {
 
 	now := param.Get("now")
 	day := param.Get("date")
-	repeat := param.Get(("repeat"))
+	repeat := param.Get("repeat")
 
 	timeNow, err := time.Parse(date.DateFormat, now)
 	if err != nil {
@@ -53,53 +52,29 @@ func TaskHandler(db *storage.TasksDB) http.HandlerFunc {
 		switch req.Method {
 
 		case http.MethodGet:
-			if param == "" {
-				http.Error(w, `{"error":"inncorect id"}`, http.StatusBadRequest)
-				return
-			}
-			response, err = db.TaskID(param)
+			response, ResponseStatus, err = helper.GetTaskID(db, param)
 			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, err.Error(), ResponseStatus)
 				return
 			}
 
 		case http.MethodPost:
-			task, ResponseStatus, err := model.CheckTask(req)
+			response, ResponseStatus, err = helper.CheckAndAddTask(db, req)
 			if err != nil {
 				http.Error(w, err.Error(), ResponseStatus)
 				return
 			}
-
-			response, err = db.AddTask(task)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-
 		case http.MethodPut:
-			task, ResponseStatus, err := model.CheckTask(req)
-			if err != nil {
-				http.Error(w, err.Error(), ResponseStatus)
-				return
-			}
-
-			response, ResponseStatus, err = db.UptadeTaskID(task)
+			response, ResponseStatus, err = helper.CheckAndUpdateTask(db, req)
 			if err != nil {
 				http.Error(w, err.Error(), ResponseStatus)
 				return
 			}
 
 		case http.MethodDelete:
-			ResponseStatus, err = db.DeleteTask(param)
+			response, ResponseStatus, err = helper.DelTask(db, param)
 			if err != nil {
 				http.Error(w, err.Error(), ResponseStatus)
-				return
-			}
-			// если прошло всё успешно, то возвращаем пустой json
-			str := map[string]interface{}{}
-			response, err = json.Marshal(str)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
 		}
@@ -113,56 +88,15 @@ func TaskHandler(db *storage.TasksDB) http.HandlerFunc {
 	}
 }
 
-// GetTasks возвращает весь список задач, максимум строк указан в перемненной LimitTasks.
+// GetTasks возвращает весь список задач.
 // Если указан параметр "search", то вовзращает задачу с указанным параметром.
-// search ищет соответсвие в полях title, comment, date.
-// Дата подаётся в формате "02.01.2006".
 func GetTasks(db *storage.TasksDB) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
-		// Создаем tasks для ответа в json.
-		tasks := make(map[string][]model.Task)
-
 		search := req.URL.Query().Get("search")
 
-		// Параметр указан, значит ищем соответсвие по параметру.
-		if search != "" {
-
-			date, isDate := date.IsDate(search)
-
-			switch isDate {
-			case true:
-				allTasks, err := db.TasksWithParameterDate(date)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				tasks["tasks"] = allTasks
-
-			case false:
-				allTasks, err := db.TasksWithParameterString(search)
-				if err != nil {
-					http.Error(w, err.Error(), http.StatusInternalServerError)
-					return
-				}
-				tasks["tasks"] = allTasks
-			}
-			// Параметр не указан, значит выводим все записи.
-		} else {
-			allTasks, err := db.QueryAllTasks()
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-			}
-			tasks["tasks"] = allTasks
-		}
-
-		// Если задач нет, возвращаем пустой json.
-		if tasks["tasks"] == nil {
-			tasks["tasks"] = []model.Task{}
-		}
-
-		response, err := json.Marshal(tasks)
+		response, ResponseStatus, err := helper.FindParameter(search, db)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), ResponseStatus)
 			return
 		}
 
@@ -182,40 +116,12 @@ func TaskDone(db *storage.TasksDB) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		id := req.URL.Query().Get("id")
 
-		task, err := db.QueryTaskDone(id)
+		response, ResponseStatus, err := helper.SearchTaskDone(id, db)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), ResponseStatus)
 			return
 		}
 
-		// Проверяем поле repeat.
-		if task.Repeat == "" {
-			ResponseStatus, err := db.DeleteTask(id)
-			if err != nil {
-				http.Error(w, err.Error(), ResponseStatus)
-				return
-			}
-		} else {
-			now := time.Now()
-			dateNew, err := date.NextDate(now, task.Date, task.Repeat)
-			if err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-
-			ResponseStatus, err := db.UpdateDateTaskDone(dateNew, id)
-			if err != nil {
-				http.Error(w, err.Error(), ResponseStatus)
-				return
-			}
-		}
-
-		str := map[string]interface{}{}
-		response, err := json.Marshal(str)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
 		w.Header().Set("Content-Type", "application/json; charset=UTF-8")
 		w.WriteHeader(http.StatusOK)
 		_, err = w.Write(response)
