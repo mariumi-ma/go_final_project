@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"go_final_project/internal/model"
-	"net/http"
 	"os"
 	"path/filepath"
 
@@ -66,8 +65,8 @@ func CheckDB() error {
 	return nil
 }
 
-// TaskID возвращает задачу по указанному id и статус ответа.
-func (t *TasksDB) TaskID(id string) (model.Task, int, error) {
+// TaskID возвращает задачу по указанному id.
+func (t *TasksDB) TaskID(id string) (model.Task, error) {
 	var task model.Task
 
 	row := t.DB.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = :id",
@@ -76,16 +75,16 @@ func (t *TasksDB) TaskID(id string) (model.Task, int, error) {
 	err := row.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return task, http.StatusNotFound, errors.New(`{"error":"not find the task"}`)
+			return task, errors.New(`{"error":"not find the task"}`)
 		}
-		return task, http.StatusInternalServerError, err
+		return task, err
 	}
 
 	if err := row.Err(); err != nil {
-		return task, http.StatusInternalServerError, err
+		return task, err
 	}
 
-	return task, http.StatusOK, nil
+	return task, nil
 }
 
 // AddTask возвращает id добавленной задачи.
@@ -110,8 +109,7 @@ func (t *TasksDB) AddTask(task model.Task) (int64, error) {
 	return id, nil
 }
 
-// UptadeTaskID возвращает статус ответа.
-func (t *TasksDB) UptadeTaskID(task model.Task) (int, error) {
+func (t *TasksDB) UptadeTaskID(task model.Task) error {
 
 	res, err := t.DB.Exec(`UPDATE scheduler SET
 	date = :date, title = :title, comment = :comment, repeat = :repeat
@@ -122,47 +120,47 @@ func (t *TasksDB) UptadeTaskID(task model.Task) (int, error) {
 		sql.Named("repeat", task.Repeat),
 		sql.Named("id", task.Id))
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return err
 	}
 
 	result, err := res.RowsAffected()
 	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf(`{"error":"task is not found" %s}`, err)
+		return err
 	}
 	if result == 0 {
-		return http.StatusNotFound, fmt.Errorf(`{"error":"task is not found"}`)
+		return errors.New(`{"error":"not found the task"}`)
 	}
 
-	return http.StatusOK, nil
+	return nil
 }
 
-// DeleteTask возвращает статус ответа.
-func (t *TasksDB) DeleteTask(id string) (int, error) {
+// DeleteTask возвращает ошибку.
+func (t *TasksDB) DeleteTask(id string) error {
 	task, err := t.DB.Exec("DELETE FROM scheduler WHERE id = :id", sql.Named("id", id))
 	if err != nil {
-		return http.StatusInternalServerError, fmt.Errorf(`{"error":"%s"}`, err)
+		return err
 	}
 
 	rowsAffected, err := task.RowsAffected()
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return err
 	}
 
 	if rowsAffected == 0 {
-		return http.StatusNotFound, errors.New(`{"error":"not found the task"}`)
+		return errors.New(`{"error":"not found the task"}`)
 	}
-	return http.StatusOK, nil
+	return nil
 }
 
-// SearchString возвращает записи с указанным параметром и статус ответа.
-func (t *TasksDB) SearchString(search string) ([]model.Task, int, error) {
+// SearchString возвращает записи с указанным параметром.
+func (t *TasksDB) SearchString(search string) ([]model.Task, error) {
 	var tasks []model.Task
 	rows, err := t.DB.Query(`SELECT id, date, title, comment, repeat FROM scheduler
 	WHERE title LIKE :search OR comment LIKE :search ORDER BY date LIMIT :limit`,
 		sql.Named("search", "%"+search+"%"),
 		sql.Named("limit", LimitTasks))
 	if err != nil {
-		return tasks, http.StatusInternalServerError, err
+		return tasks, err
 	}
 	defer rows.Close()
 
@@ -172,22 +170,22 @@ func (t *TasksDB) SearchString(search string) ([]model.Task, int, error) {
 		err := rows.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				return tasks, http.StatusNotFound, errors.New(`{"error":"not find the task"}`)
+				return tasks, errors.New(`{"error":"not find the task"}`)
 			} else {
-				return tasks, http.StatusInternalServerError, err
+				return tasks, err
 			}
 		}
 
 		if err := rows.Err(); err != nil {
-			return tasks, http.StatusInternalServerError, err
+			return tasks, err
 		}
 		tasks = append(tasks, task)
 	}
-	return tasks, http.StatusOK, nil
+	return tasks, nil
 }
 
-// SearchDate возвращает записи с указанной датой и статус ответа.
-func (t *TasksDB) SearchDate(date string) ([]model.Task, int, error) {
+// SearchDate возвращает записи с указанной датой.
+func (t *TasksDB) SearchDate(date string) ([]model.Task, error) {
 	var tasks []model.Task
 
 	rows, err := t.DB.Query(`SELECT id, date, title, comment, repeat FROM scheduler
@@ -196,7 +194,7 @@ func (t *TasksDB) SearchDate(date string) ([]model.Task, int, error) {
 		sql.Named("limit", LimitTasks))
 
 	if err != nil {
-		return tasks, http.StatusInternalServerError, err
+		return tasks, err
 	}
 	defer rows.Close()
 
@@ -206,23 +204,23 @@ func (t *TasksDB) SearchDate(date string) ([]model.Task, int, error) {
 		err := rows.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				return tasks, http.StatusNotFound, errors.New(`{"error":"not find the task"}`)
+				return tasks, errors.New(`{"error":"not find the task"}`)
 			} else {
-				return tasks, http.StatusInternalServerError, err
+				return tasks, err
 			}
 		}
 
 		if err := rows.Err(); err != nil {
-			return tasks, http.StatusInternalServerError, err
+			return tasks, err
 		}
 
 		tasks = append(tasks, task)
 	}
-	return tasks, http.StatusOK, nil
+	return tasks, nil
 }
 
-// FindTaskDone возвращает запись найденную по id и статус ответа.
-func (t *TasksDB) FindTaskDone(id string) (model.Task, int, error) {
+// FindTaskDone возвращает запись найденную по id.
+func (t *TasksDB) FindTaskDone(id string) (model.Task, error) {
 	var task model.Task
 
 	row := t.DB.QueryRow("SELECT id, date, title, comment, repeat FROM scheduler WHERE id = :id",
@@ -231,46 +229,46 @@ func (t *TasksDB) FindTaskDone(id string) (model.Task, int, error) {
 	err := row.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return task, http.StatusNotFound, errors.New(`{"error":"not find the task"}`)
+			return task, errors.New(`{"error":"not find the task"}`)
 		}
-		return task, http.StatusInternalServerError, err
+		return task, err
 	}
 
 	if err := row.Err(); err != nil {
-		return task, http.StatusInternalServerError, err
+		return task, err
 	}
-	return task, http.StatusOK, nil
+	return task, nil
 }
 
-// UpdateDateTaskDone обновляет следующую дату. Возвращает статус ответа.
-func (t *TasksDB) UpdateDateTaskDone(date, id string) (int, error) {
+// UpdateDateTaskDone обновляет следующую дату.
+func (t *TasksDB) UpdateDateTaskDone(date, id string) error {
 
 	res, err := t.DB.Exec(`UPDATE scheduler SET date = :date WHERE id = :id`,
 		sql.Named("date", date),
 		sql.Named("id", id))
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return err
 	}
 
 	result, err := res.RowsAffected()
 	if err != nil {
-		return http.StatusInternalServerError, err
+		return err
 	}
 	if result == 0 {
-		return http.StatusNotFound, fmt.Errorf(`{"error":"task is not found"}`)
+		return errors.New(`{"error":"not found the task"}`)
 	}
 
-	return http.StatusOK, nil
+	return nil
 }
 
-// FindTasks возвращает все записи и статус ответа. Лимит указан в константе LimitTasks.
-func (t *TasksDB) FindTasks() ([]model.Task, int, error) {
+// FindTasks возвращает все записи. Лимит указан в константе LimitTasks.
+func (t *TasksDB) FindTasks() ([]model.Task, error) {
 	var tasks []model.Task
 	rows, err := t.DB.Query(`SELECT id, date, title, comment, repeat FROM scheduler
 	ORDER BY date LIMIT :limit`,
 		sql.Named("limit", LimitTasks))
 	if err != nil {
-		return tasks, http.StatusInternalServerError, err
+		return tasks, err
 	}
 	defer rows.Close()
 
@@ -280,17 +278,17 @@ func (t *TasksDB) FindTasks() ([]model.Task, int, error) {
 		err := rows.Scan(&task.Id, &task.Date, &task.Title, &task.Comment, &task.Repeat)
 		if err != nil {
 			if err == sql.ErrNoRows {
-				return tasks, http.StatusNotFound, errors.New(`{"error":"not find the task"}`)
+				return tasks, errors.New(`{"error":"not find the task"}`)
 			} else {
-				return tasks, http.StatusInternalServerError, err
+				return tasks, err
 			}
 		}
 
 		if err := rows.Err(); err != nil {
-			return tasks, http.StatusInternalServerError, err
+			return tasks, err
 		}
 
 		tasks = append(tasks, task)
 	}
-	return tasks, http.StatusOK, nil
+	return tasks, nil
 }

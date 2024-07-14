@@ -2,6 +2,7 @@
 package helper
 
 import (
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"go_final_project/internal/date"
@@ -22,9 +23,12 @@ func GetTaskID(db *storage.TasksDB, id string) ([]byte, int, error) {
 		return []byte{}, http.StatusBadRequest, errors.New(`{"error":"inncorect id"}`)
 	}
 
-	task, ResponseStatus, err := db.TaskID(id)
+	task, err := db.TaskID(id)
 	if err != nil {
-		return []byte{}, ResponseStatus, err
+		if err == sql.ErrNoRows {
+			return []byte{}, http.StatusNotFound, err
+		}
+		return []byte{}, http.StatusInternalServerError, err
 	}
 
 	response, err := json.Marshal(task)
@@ -50,25 +54,35 @@ func FindParameter(search string, db *storage.TasksDB) ([]byte, int, error) {
 
 		switch isDate {
 		case true:
-			allTasks, ResponseStatus, err := db.SearchDate(date)
+			allTasks, err := db.SearchDate(date)
 			if err != nil {
-				return []byte{}, ResponseStatus, err
+				if err == sql.ErrNoRows {
+					return []byte{}, http.StatusNotFound, err
+				}
+				return []byte{}, http.StatusInternalServerError, err
 			}
 			tasks["tasks"] = allTasks
 
 		case false:
-			allTasks, ResponseStatus, err := db.SearchString(search)
+			allTasks, err := db.SearchString(search)
 			if err != nil {
-				return []byte{}, ResponseStatus, err
+				if err == sql.ErrNoRows {
+					return []byte{}, http.StatusNotFound, err
+				}
+				return []byte{}, http.StatusInternalServerError, err
 			}
 			tasks["tasks"] = allTasks
 		}
 		// Параметр не указан, значит выводим все записи.
 	} else {
-		allTasks, ResponseStatus, err := db.FindTasks()
+		allTasks, err := db.FindTasks()
 		if err != nil {
-			return []byte{}, ResponseStatus, err
+			if err == sql.ErrNoRows {
+				return []byte{}, http.StatusNotFound, err
+			}
+			return []byte{}, http.StatusInternalServerError, err
 		}
+
 		tasks["tasks"] = allTasks
 	}
 
@@ -90,16 +104,22 @@ func FindParameter(search string, db *storage.TasksDB) ([]byte, int, error) {
 // Возвращает ответ статуса и, в случае успеха, пустой json.
 func SearchTaskDone(id string, db *storage.TasksDB) ([]byte, int, error) {
 
-	task, ResponseStatus, err := db.FindTaskDone(id)
+	task, err := db.FindTaskDone(id)
 	if err != nil {
-		return []byte{}, ResponseStatus, err
+		if err == sql.ErrNoRows {
+			return []byte{}, http.StatusNotFound, err
+		}
+		return []byte{}, http.StatusInternalServerError, err
 	}
 
 	// Проверяем поле repeat.
 	if task.Repeat == "" {
-		ResponseStatus, err := db.DeleteTask(id)
+		err := db.DeleteTask(id)
 		if err != nil {
-			return []byte{}, ResponseStatus, err
+			if err == errors.New(`{"error":"not found the task"}`) {
+				return []byte{}, http.StatusNotFound, err
+			}
+			return []byte{}, http.StatusInternalServerError, err
 		}
 	} else {
 		now := time.Now()
@@ -108,9 +128,12 @@ func SearchTaskDone(id string, db *storage.TasksDB) ([]byte, int, error) {
 			return []byte{}, http.StatusBadRequest, err
 		}
 
-		ResponseStatus, err := db.UpdateDateTaskDone(dateNew, id)
+		err = db.UpdateDateTaskDone(dateNew, id)
 		if err != nil {
-			return []byte{}, ResponseStatus, err
+			if err == errors.New(`{"error":"not found the task"}`) {
+				return []byte{}, http.StatusNotFound, err
+			}
+			return []byte{}, http.StatusInternalServerError, err
 		}
 	}
 
@@ -131,9 +154,12 @@ func CheckAndUpdateTask(db *storage.TasksDB, req *http.Request) ([]byte, int, er
 		return []byte{}, ResponseStatus, err
 	}
 
-	ResponseStatus, err = db.UptadeTaskID(task)
+	err = db.UptadeTaskID(task)
 	if err != nil {
-		return []byte{}, ResponseStatus, err
+		if err == errors.New(`{"error":"not found the task"}`) {
+			return []byte{}, http.StatusNotFound, err
+		}
+		return []byte{}, http.StatusInternalServerError, err
 	}
 
 	// Создаем пустой объект для ответа в json.
@@ -171,9 +197,12 @@ func CheckAndAddTask(db *storage.TasksDB, req *http.Request) ([]byte, int, error
 
 // DelTask удаляет запись по указанному id. Возвращает пустой json и статус ответа.
 func DelTask(db *storage.TasksDB, id string) ([]byte, int, error) {
-	ResponseStatus, err := db.DeleteTask(id)
+	err := db.DeleteTask(id)
 	if err != nil {
-		return []byte{}, ResponseStatus, err
+		if err == errors.New(`{"error":"not found the task"}`) {
+			return []byte{}, http.StatusNotFound, err
+		}
+		return []byte{}, http.StatusInternalServerError, err
 	}
 
 	// если прошло всё успешно, то возвращаем пустой json
